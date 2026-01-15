@@ -37,6 +37,34 @@ This repository contains a collection of Python scripts for personal productivit
 2.  **Shared Client**:
     The scripts use `src/genai_client.py` to initialize the Gemini client and load environment variables.
 
+### Setup: Adding a New Slack Workspace
+
+Don't manually configure scopes. Use the **App Manifest** to configure a new workspace in <60 seconds.
+
+#### 1. Create the App
+1. Go to [api.slack.com/apps](https://api.slack.com/apps).
+2. Click **Create New App** → Select **From an app manifest**.
+3. Select the workspace you want to add.
+4. Click **Next** and ensure the tab is set to **YAML**.
+5. Paste the [Manifest Configuration](#manifest-configuration) below (overwrite everything).
+6. Click **Next** → **Create**.
+
+#### 2. Install & Get Token
+1. Click **"Install to Workspace"** (green button).
+2. Click **Allow**.
+3. Copy the **User OAuth Token** (starts with `xoxp-...`).
+
+#### 3. Update Environment
+1. Add the token to your local `.env` file:
+   ```bash
+   ```bash
+   SLACK_TOKEN_NEW_WORKSPACE=xoxp-your-token-here
+   ```
+   *Note: The script automatically loads any environment variable starting with `SLACK_TOKEN_` as a workspace token.*
+
+#### Manifest Configuration
+(See `template/slack.yml` for the full YAML configuration)
+
 ## Scripts
 
 ### 1. Chief of Staff (`src/chief_of_staff.py`)
@@ -56,6 +84,13 @@ Acts as an executive assistant, filtering messages from Gmail (and optionally Sl
 python src/chief_of_staff.py
 ```
 *Tip: Alias this command to `cos` for easy access.*
+
+**Options:**
+- `--sources`: Specify which data sources to fetch (default: all).
+  ```bash
+  python src/chief_of_staff.py --sources gmail
+  python src/chief_of_staff.py --sources slack telegram
+  ```
 
 ### 2. Repository Recap (`src/recap_repos.py`)
 

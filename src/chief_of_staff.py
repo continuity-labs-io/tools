@@ -1,5 +1,6 @@
 import os
 import json
+import argparse
 import datetime
 import asyncio
 from typing import List, Dict
@@ -62,8 +63,9 @@ load_dotenv()
 
 # Load specific tokens for each workspace
 SLACK_TOKENS = {
-    "LBF": os.getenv("SLACK_TOKEN_LBF"),
-    "12SF": os.getenv("SLACK_TOKEN_12SF")
+    k.replace("SLACK_TOKEN_", ""): v
+    for k, v in os.environ.items()
+    if k.startswith("SLACK_TOKEN_")
 }
 
 TELEGRAM_API_ID = os.getenv("TELEGRAM_API_ID")
@@ -148,7 +150,7 @@ async def fetch_telegram(api_id, api_hash) -> List[Dict]:
 
 # --- 3. GMAIL FETCHER ---
 def fetch_gmail() -> List[Dict]:
-    print("🔵 Fetching Gmail...")
+    print("Fetching Gmail...")
     SCOPES = ['https://www.googleapis.com/auth/gmail.readonly']
     creds = None
     messages = []
@@ -197,27 +199,44 @@ def fetch_gmail() -> List[Dict]:
 
 # --- MAIN AGGREGATOR & ANALYZER ---
 async def main():
-    print(f"🚀 Starting Chief of Staff Dump for {datetime.date.today()}...")
+    print(f"Starting Chief of Staff Dump for {datetime.date.today()}...")
     
     all_messages = []
 
     # 1. Fetch Data
+    parser = argparse.ArgumentParser(description="Chief of Staff - Daily Briefing Generator")
+    parser.add_argument(
+        "--sources", 
+        nargs="+", 
+        default=["gmail", "slack", "telegram"],
+        choices=["gmail", "slack", "telegram"],
+        help="Specify which data sources to fetch (default: all)"
+    )
+    args = parser.parse_args()
+
     # Uncomment these to enable Slack/Telegram when you are ready
-    # for name, token in SLACK_TOKENS.items():
-    #     all_messages.extend(fetch_slack(token, name))
+    if "slack" in args.sources:
+        for name, token in SLACK_TOKENS.items():
+            all_messages.extend(fetch_slack(token, name))
     
-    # all_messages.extend(await fetch_telegram(TELEGRAM_API_ID, TELEGRAM_API_HASH))
+    if "telegram" in args.sources:
+        all_messages.extend(await fetch_telegram(TELEGRAM_API_ID, TELEGRAM_API_HASH))
     
-    all_messages.extend(fetch_gmail())
+    if "gmail" in args.sources:
+        all_messages.extend(fetch_gmail())
+    
+    if not all_messages:
+        print("No messages found.")
+        return
     
     # 2. Save Raw Dump (for history/debugging)
     output_file = os.path.join(OUTPUT_DIR, f"daily_dump_{datetime.date.today()}.json")
     with open(output_file, "w", encoding="utf-8") as f:
         json.dump(all_messages, f, indent=2, ensure_ascii=False)
-    print(f"✅ Raw dump saved to {output_file} ({len(all_messages)} items)")
+    print(f"Raw dump saved to {output_file} ({len(all_messages)} items)")
 
     # 3. Send to Gemini
-    print("\n🧠 Chief of Staff is analyzing...")
+    print("\nChief of Staff (Gemini) is analyzing...")
     
     try:
         client = get_client()
@@ -235,7 +254,7 @@ async def main():
 
         # Print to Terminal
         print("\n" + "="*50)
-        print("       📝 DAILY EXECUTIVE BRIEFING        ")
+        print("DAILY BRIEFING")
         print("="*50 + "\n")
         print(response.text)
         print("\n" + "="*50)
@@ -244,10 +263,10 @@ async def main():
         briefing_file = os.path.join(OUTPUT_DIR, f"daily_briefing_{datetime.date.today()}.md")
         with open(briefing_file, "w", encoding="utf-8") as f:
             f.write(response.text)
-        print(f"✅ Briefing saved to {briefing_file}")
+        print(f"Briefing saved to {briefing_file}")
 
     except Exception as e:
-        print(f"❌ Analysis Failed: {e}")
+        print(f"Analysis Failed: {e}")
 
 if __name__ == "__main__":
     asyncio.run(main())
