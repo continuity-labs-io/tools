@@ -5,6 +5,10 @@ import datetime
 import asyncio
 from typing import List, Dict
 from dotenv import load_dotenv
+import feedparser
+import urllib.parse
+import requests
+import time
 
 # Libraries
 from slack_sdk import WebClient
@@ -17,9 +21,49 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from genai_client import get_client
 
-# 1. Define your System Instruction (The Persona)
+# 1. Constants & Prompts
+MODEL_NAME = "gemini-2.0-flash"
+
+PROMPT_ARXIV_DEEP_RESEARCH = (
+    "Analyze this paper. Provide a structured summary including: "
+    "Core Innovation, Key Technical Implementation Details, and "
+    "Relevance to Topological Compute/Hopf Architectures."
+)
+
+PROMPT_DAILY_BRIEFING_USER = "Here is the raw data dump. Generate my executive briefing."
+
+WEIGHTED_KEYWORD_MATRIX = """
+1. Materials (Weight: 20%): AlGaAs, Lithium Niobate, LNOI, Tantalum Pentoxide, Silicon Nitride.
+2. Structures (Weight: 30%): Microring resonator, Photonic crystal, Meta-surface, Non-Hermitian lattice.
+3. Phenomena (Weight: 50%): Hopfion, Skyrmion, Berry curvature, Bound states in the continuum, Synthetic dimensions.
+"""
+
+PROMPT_ARXIV_SCORING_SYSTEM = f"""
+You are a Senior Hardware Architect specializing in Topological Computing and Hopf Architectures.
+Your goal is to evaluate the provided research paper against a specific Weighted Keyword Matrix and determine its relevance to the user's goals.
+
+**Weighted Keyword Matrix:**
+{WEIGHTED_KEYWORD_MATRIX}
+
+**Scoring Criteria (0-100):**
+- **Hardware Feasibility:** Can this be fabricated on-chip? (Is it theoretical only, or are there experimental results/clear pathways to fabrication?)
+- **Topological Robustness:** Does it utilize true topological protection (e.g., backscattering immunity, topological invariants)?
+- **Hopf Connection:** Does it relate to Hopf Fibration, 3D topological solitons (Hopfions), or high-dimensional topological states?
+
+**Output Format:**
+Return a JSON object with the following fields:
+- `relevance_score` (int): 0-100.
+- `justification` (string): Brief explanation of the score.
+- `hardware_feasibility` (string): Assessment of fabrication potential.
+- `topological_robustness` (string): Assessment of topological properties.
+- `hopf_connection` (string): Assessment of relevance to Hopf/3D topology.
+- `catch` (string): The "Catch" - potential fabrication hurdle, theoretical limitation, or scalability issue.
+- `summary` (string): A concise summary of the paper's core innovation.
+"""
+
+# Define your System Instruction (The Persona)
 # We use triple quotes (""") to handle the multi-line text cleanly.
-chief_of_staff_prompt = """
+PROMPT_CHIEF_OF_STAFF_SYSTEM = """
 You are the user's Chief of Staff. Your goal is to apply the Eisenhower Matrix to a "fire hose" of raw message data (Slack, Telegram, Email) and filter out 90% of the noise.
 
 **Input Data:**
@@ -50,6 +94,11 @@ The user will provide a JSON dump or text stream of messages from the last 24 ho
 
 # 🟢 Clarifications (Optional)
 * *List any ambiguous items where you cannot determine urgency without more info.*
+
+# 🟣 Strategic Intelligence (Research & Funding)
+* **[Platform] Sender Name:** [Title of Paper or Grant].
+    * *Significance:* [Why does this matter to the user's Hopf topological compute goals?]
+    * *Link:* [Link]
 
 **Tone:**
 Direct, executive, and concise. No fluff. If the inbox is empty of urgent items, state "All clear."
@@ -197,6 +246,172 @@ def fetch_gmail() -> List[Dict]:
     print(f"   Found {len(messages)} Gmail messages.")
     return messages
 
+# Core research keywords for Hopf Architecture & Topological Compute
+RESEARCH_DRAGNET = {
+    "math": [
+        "Hopf fibration", 
+        "topological compute"
+    ],
+    "materials": [
+        "AlGaAs", 
+        "Lithium Niobate", 
+        "LNOI", 
+        "Chalcogenide", 
+        "Silicon Nitride"
+    ],
+    "structures": [
+        "Microring resonator", 
+        "Photonic crystal", 
+        "Topological insulator", 
+        "Meta-surface"
+    ],
+    "phenomena": [
+        "Skyrmion", 
+        "Hopfion", 
+        "Berry curvature", 
+        "Bound states in the continuum", 
+        "Synthetic dimensions"
+    ]
+}
+
+# --- 4. SCIENCE OFFICER (ArXiv) ---
+def fetch_arxiv_papers(top_n=5) -> List[Dict]:
+    print("🔵 Fetching ArXiv Research (Deep Mode)...")
+    
+    # We construct a query for your niche interests
+    # Flatten the RESEARCH_DRAGNET dictionary values into a single list of keywords
+    keywords = [k for category in RESEARCH_DRAGNET.values() for k in category]
+    query = "+OR+".join([urllib.parse.quote(k) for k in keywords])
+    
+    # ArXiv API is basically an RSS feed
+    url = f'http://export.arxiv.org/api/query?search_query=all:{query}&start=0&max_results=5&sortBy=submittedDate&sortOrder=descending'
+    
+    feed = feedparser.parse(url)
+    analyzed_papers = []
+    
+    DOWNLOAD_DIR = os.path.expanduser("~/Desktop/cos_downloads")
+    if not os.path.exists(DOWNLOAD_DIR):
+        os.makedirs(DOWNLOAD_DIR)
+        
+    client = get_client()
+
+    # Limit to top N for deep research
+    for entry in feed.entries[:top_n]:
+        print(f"> {entry.title[:50]}...")
+        
+        # 1. Find PDF Link
+        pdf_link = None
+        for link in entry.links:
+            if link.type == 'application/pdf':
+                pdf_link = link.href
+                break
+        
+        # Fallback: Convert /abs/ to /pdf/
+        if not pdf_link:
+            pdf_link = entry.link.replace("/abs/", "/pdf/") + ".pdf"
+            
+        # 2. Download PDF
+        filename = os.path.join(DOWNLOAD_DIR, f"{entry.id.split('/')[-1]}.pdf")
+        try:
+            response = requests.get(pdf_link)
+            with open(filename, 'wb') as f:
+                f.write(response.content)
+            
+            # 3. Upload to Gemini
+            pdf_file = client.files.upload(file=filename)
+            
+            # Wait for processing
+            while pdf_file.state.name == "PROCESSING":
+                time.sleep(2)
+                pdf_file = client.files.get(name=pdf_file.name)
+                
+            if pdf_file.state.name == "FAILED":
+                print("      PDF processing failed.")
+                continue
+                
+            # 4. Generate Deep Summary (JSON)
+            response = client.models.generate_content(
+                model=MODEL_NAME,
+                config={
+                    "system_instruction": PROMPT_ARXIV_SCORING_SYSTEM,
+                    "response_mime_type": "application/json"
+                },
+                contents=[pdf_file, "Analyze this paper."]
+            )
+            
+            analysis = json.loads(response.text)
+            if isinstance(analysis, list):
+                analysis = analysis[0]
+                
+            analysis['title'] = entry.title
+            analysis['link'] = entry.link
+            analysis['author'] = entry.author
+            analyzed_papers.append(analysis)
+            
+        except Exception as e:
+            print(f"      Failed to process {entry.title}: {e}")
+            
+    # 5. Rank and Filter
+    analyzed_papers.sort(key=lambda x: x.get('relevance_score', 0), reverse=True)
+    
+    minscore = 10
+    breakthrough_score = 50
+    final_messages = []
+    for p in analyzed_papers:
+        score = p.get('relevance_score', 0)
+        if score < minscore:
+            continue
+            
+        signal_prefix = "🚨 BREAKTHROUGH SIGNAL" if score > breakthrough_score else f"{score}% Match"
+        
+        formatted_text = (
+            f"**{signal_prefix}: {p['title']}**\n"
+            f"*   **Why it matters:** {p.get('hopf_connection', 'N/A')}\n"
+            f"*   **The Catch:** {p.get('catch', 'N/A')}\n"
+            f"*   **Summary:** {p.get('summary', 'N/A')}\n"
+            f"*   **Link:** {p['link']}"
+        )
+        
+        final_messages.append({
+            "platform": "ArXiv",
+            "channel": "Research",
+            "sender": p['author'],
+            "text": formatted_text,
+            "ts": datetime.datetime.now().timestamp()
+        })
+        
+    print(f"   Processed {len(final_messages)} relevant papers (out of {len(analyzed_papers)} analyzed).")
+    return final_messages
+
+# --- 5. PROCUREMENT OFFICER (Grants.gov / SBIR) ---
+def fetch_federal_grants() -> List[Dict]:
+    print("🔵 Fetching Federal Grants (SBIR/STTR)...")
+    
+    # SBIR.gov RSS Feed (Small Business Innovation Research - where the DoD money lives)
+    # This is a general feed, but we can filter it in Python or let Gemini filter it.
+    # A more targeted approach is scraping, but RSS is safer for scripts.
+    rss_url = "https://www.sbir.gov/rss/solicitations.xml"
+    
+    feed = feedparser.parse(rss_url)
+    opportunities = []
+    
+    target_keywords = ["topological", "photonic", "neuromorphic", "compute", "novel architecture", "hopf"]
+    
+    for entry in feed.entries:
+        # Simple keyword filter before we even bother Gemini
+        content = (entry.title + entry.summary).lower()
+        if any(k in content for k in target_keywords):
+            opportunities.append({
+                "platform": "GovGrants",
+                "channel": "Funding",
+                "sender": "US Govt",
+                "text": f"Grant: {entry.title}\nDetails: {entry.summary}\nLink: {entry.link}",
+                "ts": datetime.datetime.now().timestamp()
+            })
+            
+    print(f"   Found {len(opportunities)} relevant grants.")
+    return opportunities
+
 # --- MAIN AGGREGATOR & ANALYZER ---
 async def main():
     print(f"Starting Chief of Staff Dump for {datetime.date.today()}...")
@@ -208,8 +423,8 @@ async def main():
     parser.add_argument(
         "--sources", 
         nargs="+", 
-        default=["gmail", "slack", "telegram"],
-        choices=["gmail", "slack", "telegram"],
+        default=["gmail", "slack", "telegram", "arxiv", "govgrants"],
+        choices=["gmail", "slack", "telegram", "arxiv", "govgrants"],
         help="Specify which data sources to fetch (default: all)"
     )
     args = parser.parse_args()
@@ -224,6 +439,12 @@ async def main():
     
     if "gmail" in args.sources:
         all_messages.extend(fetch_gmail())
+    
+    if "arxiv" in args.sources:
+        all_messages.extend(fetch_arxiv_papers())
+    
+    if "govgrants" in args.sources:
+        all_messages.extend(fetch_federal_grants())
     
     if not all_messages:
         print("No messages found.")
@@ -247,9 +468,9 @@ async def main():
         
         # Generate Briefing
         response = client.models.generate_content(
-            model="gemini-2.0-flash",
-            config={"system_instruction": chief_of_staff_prompt},
-            contents=[json_content, "Here is the raw data dump. Generate my executive briefing."]
+            model=MODEL_NAME,
+            config={"system_instruction": PROMPT_CHIEF_OF_STAFF_SYSTEM},
+            contents=[json_content, PROMPT_DAILY_BRIEFING_USER]
         )
 
         # Print to Terminal
