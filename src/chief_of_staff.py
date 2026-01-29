@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 import feedparser
 import urllib.parse
 import requests
+import sqlite3
 import time
 
 # Libraries
@@ -20,7 +21,7 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from genai_client import get_client
-from playwright.sync_api import sync_playwright
+from playwright.async_api import async_playwright
 
 # 1. Constants & Prompts
 MODEL_NAME = "gemini-2.0-flash"
@@ -62,47 +63,28 @@ Return a JSON object with the following fields:
 - `summary` (string): A concise summary of the paper's core innovation.
 """
 
-# Define your System Instruction (The Persona)
-# We use triple quotes (""") to handle the multi-line text cleanly.
-PROMPT_CHIEF_OF_STAFF_SYSTEM = """
-You are the user's Chief of Staff. Your goal is to apply the Eisenhower Matrix to a "fire hose" of raw message data (Slack, Telegram, Email) and filter out 90% of the noise.
+PROMPT_CHIEF_OF_STAFF_SYSTEM = f"""
+You are the Chief of Staff for a PhD-level Hardware Architect and Founder focused on the 'Hopf Brain' photonic architecture and substrate independence. Your goal is to provide a high-signal, low-noise briefing from the last 24 hours of data.
 
-**Input Data:**
-The user will provide a JSON dump or text stream of messages from the last 24 hours.
+### PRIORITIZATION LOGIC (The Weighted Attention Matrix)
+1. **TIER 1: CRITICAL SIGNAL (iMessage & High-Weight ArXiv)**
+   - Treat iMessages as the highest priority personal/professional signal. Elevate direct requests or updates from human contacts here.
+   - ArXiv papers with a 'Hopf Score' > 85% must be featured prominently.
 
-**Your Processing Logic:**
-1.  Scan every message.
-2.  Discard anything that is:
-    * Newsletters / Marketing / Spam.
-    * Automated alerts (CI/CD, Jira) unless they indicate a critical failure.
-    * "Thank you" / "Sounds good" / Low-signal social chatter.
-3.  Group related messages (e.g., 5 Slack DMs from the same person about the same topic = 1 item).
-4.  Categorize the remaining signal into the formats below.
+2. **TIER 2: RESEARCH & GRANTS (Gmail & Federal Feeds)**
+   - Surface relevant technical correspondence or grant opportunities.
 
-**Output Format (Strict Markdown):**
+3. **TIER 3: BROAD CONTEXT (Telegram & WhatsApp)**
+   - **Broadly Demote:** Treat these as secondary sources. Do NOT summarize social chatter, memes, or low-stakes group conversations.
+   - **Exception Rule:** Only elevate a Telegram/WhatsApp message if it contains specific technical keywords: {WEIGHTED_KEYWORD_MATRIX}.
 
-# 🔴 Urgent & Important (Do Now)
-* **[Platform] Sender Name:** [One-sentence summary of the fire].
-    * *Context:* [Brief detail if needed]
-    * *Action:* [What needs to be done?]
+### OUTPUT STRUCTURE
+- **Executive Summary:** A 1-paragraph synthesis of the 'State of the Union' for today.
+- **Topological & Hopf Signal:** Technical breakthroughs from ArXiv or specialized chats.
+- **Actionable Intelligence:** Direct requests or high-priority meetings from iMessage/Gmail.
+- **The Noise Floor:** A very brief bulleted list of secondary items from Telegram/WhatsApp that *barely* made the cut.
 
-# 🟡 Not Urgent but Important (Schedule)
-* **[Platform] Sender Name:** [Summary of proposal/document to review].
-    * *Link:* [Insert Link if available]
-
-# 🔵 Urgent but Not Important (Delegate)
-* **[Platform] Sender Name:** [Request for access/info that can be delegated].
-
-# 🟢 Clarifications (Optional)
-* *List any ambiguous items where you cannot determine urgency without more info.*
-
-# 🟣 Strategic Intelligence (Research & Funding)
-* **[Platform] Sender Name:** [Title of Paper or Grant].
-    * *Significance:* [Why does this matter to the user's Hopf topological compute goals?]
-    * *Link:* [Link]
-
-**Tone:**
-Direct, executive, and concise. No fluff. If the inbox is empty of urgent items, state "All clear."
+Maintain a tone that is professional, resonant, and motivational. Use American spelling and present information primarily in paragraphs. Avoid unnecessary corrective language.
 """
 
 OUTPUT_DIR = os.path.expanduser("~/gh")
@@ -437,9 +419,9 @@ def fetch_federal_grants() -> List[Dict]:
     print(f"   Found {len(opportunities)} relevant grants.")
     return opportunities
 
-# --- 6. WHATSAPP FETCHER ---
-def fetch_whatsapp() -> List[Dict]:
-    print("🔵 Fetching WhatsApp...")
+# --- 6. WHATSAPP FETCHER (Async Version) ---
+async def fetch_whatsapp() -> List[Dict]:
+    print("🔵 Fetching WhatsApp (Async Mode)...")
     session_dir = os.path.expanduser("~/gh/tools/src/whatsapp_session")
     
     if not os.path.exists(session_dir):
@@ -447,47 +429,102 @@ def fetch_whatsapp() -> List[Dict]:
         return []
 
     messages = []
-    with sync_playwright() as p:
-        # Launch headless browser using the authenticated session
-        context = p.chromium.launch_persistent_context(session_dir, headless=True)
-        page = context.new_page()
-        page.goto("https://web.whatsapp.com")
+    async with async_playwright() as p:
+        # We specify a modern Chrome User Agent to bypass the "Update Chrome" error
+        context = await p.chromium.launch_persistent_context(
+            session_dir, 
+            headless=True,
+            user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+            viewport={'width': 1280, 'height': 800}
+        )
+        page = await context.new_page()
         
         try:
-            # Wait for the chat list to load
-            page.wait_for_selector("div[aria-label='Chat list']", timeout=30000)
+            # wait_until="networkidle" ensures the page is fully loaded before we look for elements
+            await page.goto("https://web.whatsapp.com", wait_until="networkidle", timeout=60000)
             
-            # Identify the most recent chat containers
-            # Selector may require periodic updates if WhatsApp changes their DOM
-            chats = page.query_selector_all("div[role='listitem']")[:10]
+            print("   Waiting for chat interface...")
+            await page.wait_for_selector("#pane-side", timeout=45000)
             
-            for chat in chats:
+            # Scrape the top dozen listitems
+            chats = await page.query_selector_all("div[role='listitem']")
+            for chat in chats[:12]:
                 try:
-                    # Get Chat Name
-                    title_element = chat.query_selector("span[title]")
-                    chat_name = title_element.get_attribute("title") if title_element else "Unknown"
+                    title_element = await chat.query_selector("span[title]")
+                    chat_name = await title_element.get_attribute("title") if title_element else "Unknown"
                     
-                    # Get Last Message Text
-                    msg_element = chat.query_selector("span[dir='ltr']")
-                    msg_text = msg_element.inner_text() if msg_element else ""
+                    # Selector for the last message preview
+                    msg_element = await chat.query_selector("span[dir='ltr']")
+                    msg_text = await msg_element.inner_text() if msg_element else ""
                     
                     if msg_text:
                         messages.append({
                             "platform": "WhatsApp",
                             "channel": chat_name,
-                            "sender": chat_name, # WhatsApp web chat list doesn't easily show individual sender in group previews
-                            "text": msg_text,
+                            "sender": chat_name,
+                            "text": msg_text.strip(),
                             "ts": datetime.datetime.now().timestamp()
                         })
                 except Exception:
                     continue
-                    
         except Exception as e:
+            await page.screenshot(path="whatsapp_error_debug.png")
             print(f"   WhatsApp Error: {e}")
         finally:
-            context.close()
+            await context.close()
             
     print(f"   Found {len(messages)} WhatsApp messages.")
+    return messages
+
+# --- 7. IMESSAGE FETCHER (Async-wrapped) ---
+async def fetch_imessage() -> List[Dict]:
+    # Wrapping synchronous SQLite in a thread to prevent blocking the async loop
+    return await asyncio.to_thread(_fetch_imessage_sync)
+
+def _fetch_imessage_sync() -> List[Dict]:
+    print("🔵 Fetching iMessage...")
+    DB_PATH = os.path.expanduser("~/Library/Messages/chat.db")
+    APPLE_EPOCH_OFFSET = 978307200
+    messages = []
+    
+    import shutil
+    temp_db = "/tmp/chat_copy.db"
+    try:
+        shutil.copy2(DB_PATH, temp_db)
+        conn = sqlite3.connect(temp_db)
+        cursor = conn.cursor()
+
+        query = """
+        SELECT 
+            message.text, 
+            handle.id as sender, 
+            message.date / 1000000000 as timestamp,
+            chat.display_name as group_name
+        FROM message
+        LEFT JOIN handle ON message.handle_id = handle.ROWID
+        LEFT JOIN chat_message_join ON message.ROWID = chat_message_join.message_id
+        LEFT JOIN chat ON chat_message_join.chat_id = chat.ROWID
+        WHERE (message.date / 1000000000 + 978307200) > strftime('%s', 'now', '-1 day')
+        AND message.text IS NOT NULL
+        ORDER BY message.date DESC;
+        """
+        cursor.execute(query)
+        rows = cursor.fetchall()
+
+        for row in rows:
+            text, sender, ts, group_name = row
+            messages.append({
+                "platform": "iMessage",
+                "channel": group_name if group_name else "Direct Message",
+                "sender": sender if sender else "Me",
+                "text": text,
+                "ts": ts + APPLE_EPOCH_OFFSET
+            })
+        conn.close()
+    except Exception as e:
+        print(f"   iMessage Error: {e}")
+    
+    print(f"   Found {len(messages)} iMessage signals.")
     return messages
 
 # --- MAIN AGGREGATOR & ANALYZER ---
@@ -501,8 +538,8 @@ async def main():
     parser.add_argument(
         "--sources", 
         nargs="+", 
-        default=["gmail", "slack", "telegram", "arxiv", "govgrants"],
-        choices=["gmail", "slack", "telegram", "arxiv", "govgrants"],
+        default=["slack", "telegram", "whatsapp", "gmail", "imessage", "arxiv", "govgrants"],
+        choices=["slack", "telegram", "whatsapp", "gmail", "imessage", "arxiv", "govgrants"],
         help="Specify which data sources to fetch (default: all)"
     )
     args = parser.parse_args()
@@ -516,10 +553,13 @@ async def main():
         all_messages.extend(await fetch_telegram(TELEGRAM_API_ID, TELEGRAM_API_HASH))
     
     if "whatsapp" in args.sources:
-        all_messages.extend(fetch_whatsapp())
+        all_messages.extend(await fetch_whatsapp())
 
     if "gmail" in args.sources:
         all_messages.extend(fetch_gmail())
+    
+    if "imessage" in args.sources:
+        all_messages.extend(await fetch_imessage())
     
     if "arxiv" in args.sources:
         all_messages.extend(fetch_arxiv_papers())
