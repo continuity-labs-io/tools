@@ -4,3 +4,5 @@ token.json
 __pycache__/
 *.pyc
 .DS_Store
+anon.session
+src/whatsapp_session/

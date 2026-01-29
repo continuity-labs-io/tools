@@ -20,6 +20,7 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from genai_client import get_client
+from playwright.sync_api import sync_playwright
 
 # 1. Constants & Prompts
 MODEL_NAME = "gemini-2.0-flash"
@@ -174,18 +175,39 @@ def fetch_slack(token: str, workspace_name: str) -> List[Dict]:
 
 # --- 2. TELEGRAM FETCHER ---
 async def fetch_telegram(api_id, api_hash) -> List[Dict]:
+    """
+    Authenticates with Telegram and retrieves messages from the last 24 hours.
+    """
     print("🔵 Fetching Telegram...")
     if not api_id or not api_hash:
         print("   Skipping Telegram (No Credentials)")
         return []
 
     messages = []
-    async with TelegramClient(TELEGRAM_SESSION, api_id, api_hash) as client:
-        async for dialog in client.iter_dialogs(limit=20):
-            async for msg in client.iter_messages(dialog, offset_date=ONE_DAY_AGO, reverse=True):
-                if msg.text:
+    # Ensure api_id is an integer for Telethon
+    api_id_int = int(api_id)
+    
+    # 'anon' is the session name; it creates a local 'anon.session' file
+    async with TelegramClient('anon', api_id_int, api_hash) as client:
+        # .start() handles the interactive login (phone, code, 2FA) in the terminal
+        await client.start()
+        
+        cutoff = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=24)
+        
+        # limit=50 scans your 50 most recently active chats
+        async for dialog in client.iter_dialogs(limit=50):
+            try:
+                # offset_date ensures we only pull recent signal
+                async for msg in client.iter_messages(dialog, offset_date=cutoff, reverse=True):
+                    if not msg.text:
+                        continue
+                        
                     sender = await msg.get_sender()
-                    name = sender.first_name if sender else "Unknown"
+                    # Resolve sender name affirmatively
+                    name = "Unknown"
+                    if sender:
+                        name = getattr(sender, 'first_name', None) or getattr(sender, 'title', 'Unknown')
+                    
                     messages.append({
                         "platform": "Telegram",
                         "channel": dialog.name,
@@ -193,6 +215,9 @@ async def fetch_telegram(api_id, api_hash) -> List[Dict]:
                         "text": msg.text,
                         "ts": msg.date.timestamp()
                     })
+            except Exception as e:
+                # Skip individual chats with restricted access or errors
+                continue
     
     print(f"   Found {len(messages)} Telegram messages.")
     return messages
@@ -412,6 +437,59 @@ def fetch_federal_grants() -> List[Dict]:
     print(f"   Found {len(opportunities)} relevant grants.")
     return opportunities
 
+# --- 6. WHATSAPP FETCHER ---
+def fetch_whatsapp() -> List[Dict]:
+    print("🔵 Fetching WhatsApp...")
+    session_dir = os.path.expanduser("~/gh/tools/src/whatsapp_session")
+    
+    if not os.path.exists(session_dir):
+        print("   Skipping WhatsApp (No session found)")
+        return []
+
+    messages = []
+    with sync_playwright() as p:
+        # Launch headless browser using the authenticated session
+        context = p.chromium.launch_persistent_context(session_dir, headless=True)
+        page = context.new_page()
+        page.goto("https://web.whatsapp.com")
+        
+        try:
+            # Wait for the chat list to load
+            page.wait_for_selector("div[aria-label='Chat list']", timeout=30000)
+            
+            # Identify the most recent chat containers
+            # Selector may require periodic updates if WhatsApp changes their DOM
+            chats = page.query_selector_all("div[role='listitem']")[:10]
+            
+            for chat in chats:
+                try:
+                    # Get Chat Name
+                    title_element = chat.query_selector("span[title]")
+                    chat_name = title_element.get_attribute("title") if title_element else "Unknown"
+                    
+                    # Get Last Message Text
+                    msg_element = chat.query_selector("span[dir='ltr']")
+                    msg_text = msg_element.inner_text() if msg_element else ""
+                    
+                    if msg_text:
+                        messages.append({
+                            "platform": "WhatsApp",
+                            "channel": chat_name,
+                            "sender": chat_name, # WhatsApp web chat list doesn't easily show individual sender in group previews
+                            "text": msg_text,
+                            "ts": datetime.datetime.now().timestamp()
+                        })
+                except Exception:
+                    continue
+                    
+        except Exception as e:
+            print(f"   WhatsApp Error: {e}")
+        finally:
+            context.close()
+            
+    print(f"   Found {len(messages)} WhatsApp messages.")
+    return messages
+
 # --- MAIN AGGREGATOR & ANALYZER ---
 async def main():
     print(f"Starting Chief of Staff Dump for {datetime.date.today()}...")
@@ -437,6 +515,9 @@ async def main():
     if "telegram" in args.sources:
         all_messages.extend(await fetch_telegram(TELEGRAM_API_ID, TELEGRAM_API_HASH))
     
+    if "whatsapp" in args.sources:
+        all_messages.extend(fetch_whatsapp())
+
     if "gmail" in args.sources:
         all_messages.extend(fetch_gmail())
     
