@@ -87,7 +87,7 @@ You are the Chief of Staff for a PhD-level Hardware Architect and Founder focuse
 Maintain a tone that is professional, resonant, and motivational. Use American spelling and present information primarily in paragraphs. Avoid unnecessary corrective language.
 """
 
-OUTPUT_DIR = os.path.expanduser("~/gh")
+OUTPUT_DIR = os.path.expanduser("~/Downloads/chief_of_staff")
 CONFIG_DIR = os.path.expanduser("~/.config/chief_of_staff")
 
 # --- CONFIGURATION ---
@@ -296,9 +296,8 @@ def fetch_arxiv_papers(top_n=5) -> List[Dict]:
     feed = feedparser.parse(url)
     analyzed_papers = []
     
-    DOWNLOAD_DIR = os.path.expanduser("~/Desktop/cos_downloads")
-    if not os.path.exists(DOWNLOAD_DIR):
-        os.makedirs(DOWNLOAD_DIR)
+    if not os.path.exists(OUTPUT_DIR):
+        os.makedirs(OUTPUT_DIR)
         
     client = get_client()
 
@@ -318,7 +317,7 @@ def fetch_arxiv_papers(top_n=5) -> List[Dict]:
             pdf_link = entry.link.replace("/abs/", "/pdf/") + ".pdf"
             
         # 2. Download PDF
-        filename = os.path.join(DOWNLOAD_DIR, f"{entry.id.split('/')[-1]}.pdf")
+        filename = os.path.join(OUTPUT_DIR, f"{entry.id.split('/')[-1]}.pdf")
         try:
             response = requests.get(pdf_link)
             with open(filename, 'wb') as f:

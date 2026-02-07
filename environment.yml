@@ -1,0 +1,14 @@
+name: base
+channels:
+  - conda-forge
+dependencies:
+  - matplotlib
+  - networkx
+  - pip:
+    - dotenv==0.9.9
+    - pandas==2.3.3
+    - python-dotenv==1.2.1
+    - pytz==2025.2
+    - tzdata==2025.3
+
+prefix: "/Users/ry/.local/share/mamba"
