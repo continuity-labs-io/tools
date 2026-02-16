@@ -157,101 +157,121 @@ def fetch_slack(token: str, workspace_name: str) -> List[Dict]:
 
 # --- 2. TELEGRAM FETCHER ---
 async def fetch_telegram(api_id, api_hash) -> List[Dict]:
-    """
-    Authenticates with Telegram and retrieves messages from the last 24 hours.
-    """
     print("🔵 Fetching Telegram...")
     if not api_id or not api_hash:
         print("   Skipping Telegram (No Credentials)")
         return []
 
     messages = []
-    # Ensure api_id is an integer for Telethon
-    api_id_int = int(api_id)
     
-    # 'anon' is the session name; it creates a local 'anon.session' file
-    async with TelegramClient('anon', api_id_int, api_hash) as client:
-        # .start() handles the interactive login (phone, code, 2FA) in the terminal
-        await client.start()
-        
-        cutoff = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=24)
-        
-        # limit=50 scans your 50 most recently active chats
-        async for dialog in client.iter_dialogs(limit=50):
-            try:
-                # offset_date ensures we only pull recent signal
-                async for msg in client.iter_messages(dialog, offset_date=cutoff, reverse=True):
-                    if not msg.text:
-                        continue
-                        
-                    sender = await msg.get_sender()
-                    # Resolve sender name affirmatively
-                    name = "Unknown"
-                    if sender:
-                        name = getattr(sender, 'first_name', None) or getattr(sender, 'title', 'Unknown')
-                    
-                    messages.append({
-                        "platform": "Telegram",
-                        "channel": dialog.name,
-                        "sender": name,
-                        "text": msg.text,
-                        "ts": msg.date.timestamp()
-                    })
-            except Exception as e:
-                # Skip individual chats with restricted access or errors
-                continue
-    
+    # FIX: Use an absolute path so the session file is always found in 'src/'
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    session_path = os.path.join(base_dir, 'anon') # Telethon adds .session automatically
+
+    try:
+        # Pass the absolute path 'session_path' instead of just 'anon'
+        async with TelegramClient(session_path, int(api_id), api_hash) as client:
+            
+            # [Rest of your logic remains exactly the same]
+            cutoff = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=24)
+            
+            async for dialog in client.iter_dialogs(limit=50):
+                try:
+                    async for msg in client.iter_messages(dialog, offset_date=cutoff, reverse=True):
+                        if msg.text:
+                            sender = await msg.get_sender()
+                            name = getattr(sender, 'first_name', None) or getattr(sender, 'title', 'Unknown')
+                            messages.append({
+                                "platform": "Telegram",
+                                "channel": dialog.name,
+                                "sender": name,
+                                "text": msg.text,
+                                "ts": msg.date.timestamp()
+                            })
+                except Exception:
+                    continue
+    except Exception as e:
+        print(f"   Telegram Error: {e}")
+
     print(f"   Found {len(messages)} Telegram messages.")
     return messages
 
-# --- 3. GMAIL FETCHER ---
+# --- 3. GMAIL FETCHER --- 
 def fetch_gmail() -> List[Dict]:
-    print("Fetching Gmail...")
+    print("🔵 Fetching Gmail...")
     SCOPES = ['https://www.googleapis.com/auth/gmail.readonly']
     creds = None
-    messages = []
-    
-    token_path = os.path.join(CONFIG_DIR, 'token.json')
-    creds_path = os.path.join(CONFIG_DIR, 'credentials.json')
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    token_path = os.path.join(base_dir, 'token.json')
+    creds_path = os.path.join(base_dir, 'credentials.json')
 
+    # Inner function to handle the auth flow
+    def authenticate():
+        flow = InstalledAppFlow.from_client_secrets_file(creds_path, SCOPES)
+        new_creds = flow.run_local_server(port=0)
+        with open(token_path, 'w') as token:
+            token.write(new_creds.to_json())
+        return new_creds
+
+    # 1. Try to load existing token
     if os.path.exists(token_path):
-        creds = Credentials.from_authorized_user_file(token_path, SCOPES)
+        try:
+            creds = Credentials.from_authorized_user_file(token_path, SCOPES)
+        except Exception:
+            print("   ⚠️ Token file corrupt. Re-authenticating...")
+            creds = authenticate()
+
+    # 2. Check validity and refresh if needed
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
+            try:
+                creds.refresh(Request())
+            except Exception as e:
+                print(f"   ⚠️ Token expired/revoked ({e}). Deleting and re-authenticating...")
+                # THE FIX: Delete the bad file and force new login
+                if os.path.exists(token_path):
+                    os.remove(token_path)
+                creds = authenticate()
         else:
+            # No valid creds, start fresh
             if not os.path.exists(creds_path):
-                print(f"   Skipping Gmail (No credentials.json found in {CONFIG_DIR})")
+                print("   ❌ Skipping Gmail (No credentials.json found)")
                 return []
-            flow = InstalledAppFlow.from_client_secrets_file(creds_path, SCOPES)
-            creds = flow.run_local_server(port=0)
-        with open(token_path, 'w') as token:
-            token.write(creds.to_json())
+            creds = authenticate()
 
+    # 3. Fetch Messages
     try:
         service = build('gmail', 'v1', credentials=creds)
-        results = service.users().messages().list(userId='me', q='newer_than:1d').execute()
-        msg_ids = results.get('messages', [])
+        
+        yesterday = datetime.datetime.now() - datetime.timedelta(days=1)
+        query_date = yesterday.strftime("%Y/%m/%d")
+        query = f'after:{query_date} -category:promotions -category:social'
 
-        for msg_meta in msg_ids:
-            msg = service.users().messages().get(userId='me', id=msg_meta['id']).execute()
-            headers = msg['payload']['headers']
-            subject = next((h['value'] for h in headers if h['name'] == 'Subject'), "(No Subject)")
+        results = service.users().messages().list(userId='me', q=query).execute()
+        messages = results.get('messages', [])
+        
+        email_data = []
+        for msg in messages[:15]: 
+            msg_detail = service.users().messages().get(userId='me', id=msg['id']).execute()
+            headers = msg_detail['payload']['headers']
+            subject = next((h['value'] for h in headers if h['name'] == 'Subject'), "No Subject")
             sender = next((h['value'] for h in headers if h['name'] == 'From'), "Unknown")
+            snippet = msg_detail.get('snippet', '')
             
-            messages.append({
+            email_data.append({
                 "platform": "Gmail",
-                "channel": "Inbox",
                 "sender": sender,
-                "text": f"Subject: {subject}\nSnippet: {msg.get('snippet', '')}",
-                "ts": int(msg['internalDate']) / 1000
+                "subject": subject,
+                "text": snippet,
+                "ts": datetime.datetime.now().timestamp()
             })
 
-    except Exception as e:
-        print(f"   Gmail Error: {e}")
+        print(f"   Found {len(email_data)} emails.")
+        return email_data
 
-    print(f"   Found {len(messages)} Gmail messages.")
-    return messages
+    except Exception as e:
+        print(f"   ❌ Gmail API Error: {e}")
+        return []
 
 # Core research keywords for Hopf Architecture & Topological Compute
 RESEARCH_DRAGNET = {
