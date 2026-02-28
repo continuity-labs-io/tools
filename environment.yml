@@ -5,10 +5,41 @@ dependencies:
   - matplotlib
   - networkx
   - pip:
+    - PyYAML==6.0.3
+    - annotated-types==0.7.0
+    - bitarray==3.8.0
+    - certifi==2026.1.4
+    - charset-normalizer==3.4.4
+    - ckzg==2.1.5
+    - cytoolz==1.1.0
     - dotenv==0.9.9
+    - eth-account==0.13.7
+    - eth-hash==0.7.1
+    - eth-keyfile==0.8.1
+    - eth-keys==0.7.0
+    - eth-rlp==2.2.0
+    - eth-typing==5.2.1
+    - eth-utils==5.3.1
+    - eth_abi==6.0.0b1
+    - hexbytes==1.3.1
+    - idna==3.11
     - pandas==2.3.3
+    - parsimonious==0.10.0
+    - pathspec==1.0.4
+    - pycryptodome==3.23.0
+    - pydantic==2.12.5
+    - pydantic_core==2.41.5
+    - pyperclip==1.11.0
     - python-dotenv==1.2.1
     - pytz==2025.2
+    - regex==2026.2.19
+    - requests==2.32.5
+    - rlp==4.1.0
+    - setuptools==82.0.0
+    - toolz==1.1.0
+    - typing-inspection==0.4.2
+    - typing_extensions==4.15.0
     - tzdata==2025.3
+    - urllib3==2.6.3
 
 prefix: "/Users/ry/.local/share/mamba"
