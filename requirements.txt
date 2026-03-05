@@ -4,7 +4,9 @@ telethon
 google-api-python-client
 google-auth-oauthlib
 google-auth-httplib2
-google-generativeai
+google-genai
 requests
 feedparser
 playwright
+eth-account
+pyobjc-framework-CoreWLAN
