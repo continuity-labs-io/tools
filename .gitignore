@@ -1,8 +1,4 @@
-.env
-credentials.json
-token.json
+secrets/
 __pycache__/
 *.pyc
 .DS_Store
-anon.session
-src/whatsapp_session/
