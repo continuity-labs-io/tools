@@ -61,7 +61,8 @@ OUTPUT_DIR = os.path.expanduser("~/Downloads/chief_of_staff")
 
 # --- CONFIGURATION ---
 base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-env_path = os.path.join(base_dir, 'secrets', '.env')
+project_root = os.path.dirname(base_dir)
+env_path = os.path.join(project_root, 'secrets', '.env')
 load_dotenv(dotenv_path=env_path)
 
 # Load specific tokens for each workspace
@@ -75,9 +76,7 @@ TELEGRAM_API_ID = os.getenv("TELEGRAM_API_ID")
 TELEGRAM_API_HASH = os.getenv("TELEGRAM_API_HASH")
 
 # --- MAIN AGGREGATOR & ANALYZER ---
-async def main_async():
-    print(f"Starting Chief of Staff Dump for {datetime.date.today()}...")
-    
+async def main_async():    
     all_messages = []
 
     # 1. Fetch Data
@@ -125,10 +124,10 @@ async def main_async():
     output_file = os.path.join(OUTPUT_DIR, f"daily_dump_{datetime.date.today()}.json")
     with open(output_file, "w", encoding="utf-8") as f:
         json.dump(all_messages, f, indent=2, ensure_ascii=False)
-    print(f"Raw dump saved to {output_file} ({len(all_messages)} items)")
+    print(f"Raw data saved to {output_file} ({len(all_messages)} items)")
 
     # 3. Send to Gemini
-    print("\nChief of Staff (Gemini) is analyzing...")
+    print("\nAnalyzing...")
     
     try:
         client = get_client()
