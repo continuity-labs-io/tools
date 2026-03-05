@@ -23,7 +23,7 @@ from chief_of_staff.fetchers.imessage import fetch_imessage
 
 # 1. Constants & Prompts
 # Updated to match the ones in genai_client if needed, but keeping the ones from original script
-MODEL_NAME = "gemini-2.0-flash" 
+MODEL_NAME = "gemini-3-pro-preview"
 
 PROMPT_DAILY_BRIEFING_USER = "Here is the raw data dump. Generate my executive briefing."
 
