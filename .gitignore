@@ -2,3 +2,4 @@ secrets/
 __pycache__/
 *.pyc
 .DS_Store
+repomix-output.xml

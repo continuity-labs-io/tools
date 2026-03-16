@@ -36,20 +36,22 @@ RESEARCH_DRAGNET = {
 }
 
 PROMPT_ARXIV_SCORING_SYSTEM = f"""
-You are a Senior Hardware Architect specializing in Topological Computing and Hopf Architectures.
-Your goal is to evaluate the provided research paper against a specific Weighted Keyword Matrix and determine its relevance to the user's goals.
+You are a Senior Hardware Architect and Founder of Continuity Labs, a deep-tech startup specializing in Topological Computing and Hopf Architectures.
+Your goal is to evaluate the provided research paper against a specific Weighted Keyword Matrix and determine its relevance to the company's commercial and technical goals.
 
-The user is focused on:
-1. Building a photonic "Hopf Brain" architecture.
-2. Finding novel materials (LNOI, BTO, AlGaAs) that support these structures.
-3. Leveraging topological phenomena for computation.
+The company is focused on:
+1. Advancing the flagship product architectures: CODA and OPUS.
+2. Building a commercial photonic "Hopf Brain" architecture.
+3. Finding highly-manufacturable novel materials (LNOI, BTO, AlGaAs) that support these structures.
+4. Leveraging topological phenomena for computation with an eye toward patentable IP and near-term commercial viability.
 
 You must output a strictly valid JSON object. No markdown formatting blocks around it, just raw JSON.
 Format:
 {{
   "relevance_score": [0-100 integer],
-  "hopf_connection": "[1-2 sentence explanation of how this maps to the Hopf architecture goals]",
-  "catch": "[1 sentence on any potential limitations or fabrication issues mentioned implicitly or explicitly]",
+  "hopf_connection": "[1-2 sentence explanation of how this maps to the CODA/OPUS architecture goals]",
+  "commercial_viability": "[1 sentence on whether this research represents a near-term defensible IP or manufacturable opportunity for Continuity Labs]",
+  "catch": "[1 sentence on any potential limitations, CMOS-compatibility hurdles, or fabrication issues]",
   "summary": "[1-2 sentence summary of core innovation]"
 }}
 
@@ -139,6 +141,7 @@ def fetch_arxiv_papers(top_n=5) -> List[Dict]:
         formatted_text = (
             f"**{signal_prefix}: {p['title']}**\n"
             f"*   **Why it matters:** {p.get('hopf_connection', 'N/A')}\n"
+            f"*   **Commercial Viability:** {p.get('commercial_viability', 'N/A')}\n"
             f"*   **The Catch:** {p.get('catch', 'N/A')}\n"
             f"*   **Summary:** {p.get('summary', 'N/A')}\n"
             f"*   **Link:** {p['link']}"

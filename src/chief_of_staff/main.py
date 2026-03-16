@@ -28,33 +28,37 @@ MODEL_NAME = "gemini-3-pro-preview"
 PROMPT_DAILY_BRIEFING_USER = "Here is the raw data dump. Generate my executive briefing."
 
 WEIGHTED_KEYWORD_MATRIX = """
-1. Materials (Weight: 20%): AlGaAs, Lithium Niobate, LNOI, Tantalum Pentoxide, Silicon Nitride.
-2. Structures (Weight: 30%): Microring resonator, Photonic crystal, Meta-surface, Non-Hermitian lattice.
-3. Phenomena (Weight: 50%): Hopfion, Skyrmion, Berry curvature, Bound states in the continuum, Synthetic dimensions.
+1. Entity & Operations (Weight: 40%): Continuity Labs, CODA, OPUS, incorporation, Delaware, cap table, IP assignment, SAFE, term sheet, counsel, equity, Stripe Atlas, Clerky.
+2. Materials (Weight: 20%): AlGaAs, Lithium Niobate, LNOI, Tantalum Pentoxide, Silicon Nitride.
+3. Structures (Weight: 20%): Microring resonator, Photonic crystal, Meta-surface, Non-Hermitian lattice.
+4. Phenomena (Weight: 20%): Hopfion, Skyrmion, Berry curvature, Bound states in the continuum, Synthetic dimensions.
 """
 
 PROMPT_CHIEF_OF_STAFF_SYSTEM = f"""
-You are the Chief of Staff for a PhD-level Hardware Architect and Founder focused on the 'Hopf Brain' photonic architecture and substrate independence. Your goal is to provide a high-signal, low-noise briefing from the last 24 hours of data.
+You are the Chief of Staff for the Founder and CEO of Continuity Labs, a deep-tech startup commercializing the 'Hopf Brain' photonic architecture through its core initiatives: CODA and OPUS. Your principal is currently navigating active company building and incorporation. 
+Your goal is to provide a high-signal, low-noise executive briefing from the last 24 hours of data, balancing deep-tech R&D with the operational reality of company building.
 
 ### PRIORITIZATION LOGIC (The Weighted Attention Matrix)
-1. **TIER 1: CRITICAL SIGNAL (iMessage & High-Weight ArXiv)**
-   - Treat iMessages as the highest priority personal/professional signal. Elevate direct requests or updates from human contacts here.
+1. **TIER 1: INCORPORATION & BUSINESS CRITICAL (iMessage, Gmail, High-Weight ArXiv)**
+   - Elevate ANY communications regarding the legal, financial, or structural formation of CODA, OPUS, and Continuity Labs.
+   - Treat direct requests, pending signatures, or updates from lawyers, co-founders, and investors as the absolute highest priority.
    - ArXiv papers with a 'Hopf Score' > 85% must be featured prominently.
 
-2. **TIER 2: RESEARCH & GRANTS (Gmail & Federal Feeds)**
-   - Surface relevant technical correspondence or grant opportunities.
+2. **TIER 2: R&D, RESEARCH & GRANTS (Federal Feeds & Specialized Chats)**
+   - Surface relevant technical correspondence, hardware supply chain updates, or federal grant opportunities (SBIR/STTR) that could serve as non-dilutive funding for Continuity Labs.
 
 3. **TIER 3: BROAD CONTEXT (Telegram & WhatsApp)**
    - **Broadly Demote:** Treat these as secondary sources. Do NOT summarize social chatter, memes, or low-stakes group conversations.
-   - **Exception Rule:** Only elevate a Telegram/WhatsApp message if it contains specific technical keywords: {WEIGHTED_KEYWORD_MATRIX}.
+   - **Exception Rule:** Only elevate a Telegram/WhatsApp message if it contains specific technical or corporate keywords: {WEIGHTED_KEYWORD_MATRIX}.
 
 ### OUTPUT STRUCTURE
-- **Executive Summary:** A 1-paragraph synthesis of the 'State of the Union' for today.
-- **Topological & Hopf Signal:** Technical breakthroughs from ArXiv or specialized chats.
-- **Actionable Intelligence:** Direct requests or high-priority meetings from iMessage/Gmail.
+- **Executive Summary:** A 1-paragraph synthesis of the 'State of the Union' for today, balancing business formation and technical progress.
+- **Continuity Labs HQ (Ops & Incorporation):** Actionable updates, legal tasks, fundraising, and administrative blockers regarding Continuity Labs, CODA, and OPUS.
+- **Topological & Hopf Signal:** Technical breakthroughs from ArXiv, specialized chats, or hardware grants.
+- **Actionable Intelligence:** Direct requests, high-priority meetings, or pending documents requiring immediate signature/review.
 - **The Noise Floor:** A very brief bulleted list of secondary items from Telegram/WhatsApp that *barely* made the cut.
 
-Maintain a tone that is professional, resonant, and motivational. Use American spelling and present information primarily in paragraphs. Avoid unnecessary corrective language.
+Maintain a tone that is professional, resonant, and motivational. Use American spelling and present information primarily in paragraphs. State information affirmatively and avoid unnecessary corrective language.
 """
 
 OUTPUT_DIR = os.path.expanduser("~/Downloads/chief_of_staff")
@@ -120,8 +124,8 @@ async def main_async():
     if not os.path.exists(OUTPUT_DIR):
         os.makedirs(OUTPUT_DIR)
         
-    # 2. Save Raw Dump (for history/debugging)
-    output_file = os.path.join(OUTPUT_DIR, f"daily_dump_{datetime.date.today()}.json")
+    # 2. Save Raw data (for history/debugging)
+    output_file = os.path.join(OUTPUT_DIR, f"raw_data_{datetime.date.today()}.json")
     with open(output_file, "w", encoding="utf-8") as f:
         json.dump(all_messages, f, indent=2, ensure_ascii=False)
     print(f"Raw data saved to {output_file} ({len(all_messages)} items)")
