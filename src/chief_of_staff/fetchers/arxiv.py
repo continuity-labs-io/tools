@@ -15,50 +15,51 @@ MODEL_NAME = "gemini-3-pro-preview"
 
 RESEARCH_DRAGNET = {
     "math": [
-        "Hopf fibration", 
-        "topological compute"
+        "Continuous Normalizing Flows", 
+        "Neural SDE", 
+        "Equivariant Graph Neural Network",
+        "EGNN",
+        "Amortized inference"
     ],
-    "materials": [
-        "AlGaAs", 
-        "Lithium Niobate", 
-        "LNOI", 
-        "Barium Titanate", 
-        "BTO", 
-        "Meta-surface"
+    "biology": [
+        "Waddington landscape", 
+        "epigenetic memory", 
+        "spatial transcriptomics", 
+        "multicellular state",
+        "tissue topology"
     ],
-    "phenomena": [
-        "Skyrmion", 
-        "Hopfion", 
-        "Berry curvature", 
-        "Bound states in the continuum", 
-        "Synthetic dimensions"
+    "physics": [
+        "Ising Hamiltonian", 
+        "non-equilibrium thermodynamics", 
+        "Langevin dynamics", 
+        "simulated bifurcation",
+        "cellular phase transition"
     ]
 }
 
-PROMPT_ARXIV_SCORING_SYSTEM = f"""
-You are a Senior Hardware Architect and Founder of Continuity Labs, a deep-tech startup specializing in Topological Computing and Hopf Architectures.
-Your goal is to evaluate the provided research paper against a specific Weighted Keyword Matrix and determine its relevance to the company's commercial and technical goals.
+PROMPT_ARXIV_SCORING_SYSTEM = """
+You are the Lead Architect of Continuum. Your goal is to evaluate the provided research paper against a specific Weighted Keyword Matrix and determine its relevance to building a civilization-scale biological physics engine.
 
-The company is focused on:
-1. Advancing the flagship product architectures: CODA and OPUS.
-2. Building a commercial photonic "Hopf Brain" architecture.
-3. Finding highly-manufacturable novel materials (LNOI, BTO, AlGaAs) that support these structures.
-4. Leveraging topological phenomena for computation with an eye toward patentable IP and near-term commercial viability.
+Continuum is focused on:
+1. Building the Amortized Neural Compiler to translate biological models into analog computable primitives.
+2. Operating strictly within the Biological Interfacing Zone (timescales of milliseconds to minutes).
+3. Utilizing continuous non-equilibrium thermodynamics to model Waddington epigenetic landscapes.
+4. Discovering new layer-appropriate observability paradigms for multicellular spatial arrays and continuous boundary flux.
 
 You must output a strictly valid JSON object. No markdown formatting blocks around it, just raw JSON.
 Format:
-{{
+{
   "relevance_score": [0-100 integer],
-  "hopf_connection": "[1-2 sentence explanation of how this maps to the CODA/OPUS architecture goals]",
-  "commercial_viability": "[1 sentence on whether this research represents a near-term defensible IP or manufacturable opportunity for Continuity Labs]",
-  "catch": "[1 sentence on any potential limitations, CMOS-compatibility hurdles, or fabrication issues]",
-  "summary": "[1-2 sentence summary of core innovation]"
-}}
+  "continuum_connection": "[1-2 sentence explanation of how this maps to the Amortized Neural Compiler or Biological Interfacing Zone]",
+  "clinical_viability": "[1 sentence on whether this accelerates the Shortest Path to deterministic biological control and Longevity Escape Velocity]",
+  "catch": "[1 sentence on any physical data collection limitations, destructive measurement constraints, or computational bottlenecks]",
+  "summary": "[1-2 sentence summary of the core mathematical or biological innovation]"
+}
 
 Weighted Matrix for Scoring:
-1. Math (Weight: 20%): Hopf fibration, topological compute.
-2. Materials (Weight: 30%): AlGaAs, Lithium Niobate, Barium Titanate, Meta-surface.
-3. Phenomena (Weight: 50%): Hopfion, Skyrmion, Berry curvature, Bound states in the continuum, Synthetic dimensions.
+1. Math (Weight: 40%): Neural SDEs, Continuous Normalizing Flows, Equivariant GNNs, Amortized Inference.
+2. Biology (Weight: 30%): Waddington landscapes, spatial transcriptomics, tissue topology, multicellular interfaces.
+3. Physics (Weight: 30%): Ising Hamiltonians, simulated bifurcation, Langevin dynamics, non-equilibrium thermodynamics.
 """
 
 def fetch_arxiv_papers(top_n=5) -> List[Dict]:
@@ -140,11 +141,11 @@ def fetch_arxiv_papers(top_n=5) -> List[Dict]:
         
         formatted_text = (
             f"**{signal_prefix}: {p['title']}**\n"
-            f"*   **Why it matters:** {p.get('hopf_connection', 'N/A')}\n"
-            f"*   **Commercial Viability:** {p.get('commercial_viability', 'N/A')}\n"
-            f"*   **The Catch:** {p.get('catch', 'N/A')}\n"
-            f"*   **Summary:** {p.get('summary', 'N/A')}\n"
-            f"*   **Link:** {p['link']}"
+            f"* **Why it matters:** {p.get('continuum_connection', 'N/A')}\n"
+            f"* **Clinical Viability:** {p.get('clinical_viability', 'N/A')}\n"
+            f"* **The Catch:** {p.get('catch', 'N/A')}\n"
+            f"* **Summary:** {p.get('summary', 'N/A')}\n"
+            f"* **Link:** {p['link']}"
         )
         
         final_messages.append({
