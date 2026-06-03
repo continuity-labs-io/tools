@@ -23,7 +23,7 @@ from chief_of_staff.fetchers.imessage import fetch_imessage
 
 # 1. Constants & Prompts
 # Updated to match the ones in genai_client if needed, but keeping the ones from original script
-MODEL_NAME = "gemini-3-pro-preview"
+MODEL_NAME = os.environ.get("GEMINI_MODEL", "gemini-3.5-flash")
 
 PROMPT_DAILY_BRIEFING_USER = "Here is the raw data dump. Generate my executive briefing."
 
@@ -141,11 +141,20 @@ async def main_async():
             json_content = f.read()
         
         # Generate Briefing
-        response = client.models.generate_content(
-            model=MODEL_NAME,
-            config={"system_instruction": PROMPT_CHIEF_OF_STAFF_SYSTEM},
-            contents=[json_content, PROMPT_DAILY_BRIEFING_USER]
-        )
+        try:
+            response = client.models.generate_content(
+                model=MODEL_NAME,
+                config={"system_instruction": PROMPT_CHIEF_OF_STAFF_SYSTEM},
+                contents=[json_content, PROMPT_DAILY_BRIEFING_USER]
+            )
+        except Exception as e:
+            fallback_model = "gemini-3.5-flash"
+            print(f"Warning: Primary model {MODEL_NAME} failed ({e}). Falling back to {fallback_model}...")
+            response = client.models.generate_content(
+                model=fallback_model,
+                config={"system_instruction": PROMPT_CHIEF_OF_STAFF_SYSTEM},
+                contents=[json_content, PROMPT_DAILY_BRIEFING_USER]
+            )
 
         # Print to Terminal
         print("\n" + "="*50)
