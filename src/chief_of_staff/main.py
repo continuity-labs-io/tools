@@ -20,48 +20,18 @@ from chief_of_staff.fetchers.arxiv import fetch_arxiv_papers
 from chief_of_staff.fetchers.grants import fetch_federal_grants
 from chief_of_staff.fetchers.whatsapp import fetch_whatsapp
 from chief_of_staff.fetchers.imessage import fetch_imessage
+from chief_of_staff.fetchers.x_list import fetch_x_list
 
 # 1. Constants & Prompts
 # Updated to match the ones in genai_client if needed, but keeping the ones from original script
 MODEL_NAME = os.environ.get("GEMINI_MODEL", "gemini-3.5-flash")
 
-PROMPT_DAILY_BRIEFING_USER = "Here is the raw data dump. Generate my executive briefing."
+from chief_of_staff.prompts import (
+    PROMPT_DAILY_BRIEFING_USER,
+    PROMPT_CHIEF_OF_STAFF_SYSTEM
+)
 
-WEIGHTED_KEYWORD_MATRIX = """
-1. Entity & Operations (Weight: 40%): Continuity Labs, CODA, OPUS, incorporation, Delaware, cap table, IP assignment, SAFE, term sheet, counsel, equity, Stripe Atlas, Clerky.
-2. Materials (Weight: 20%): AlGaAs, Lithium Niobate, LNOI, Tantalum Pentoxide, Silicon Nitride.
-3. Structures (Weight: 20%): Microring resonator, Photonic crystal, Meta-surface, Non-Hermitian lattice.
-4. Phenomena (Weight: 20%): Hopfion, Skyrmion, Berry curvature, Bound states in the continuum, Synthetic dimensions.
-"""
-
-PROMPT_CHIEF_OF_STAFF_SYSTEM = f"""
-You are the Chief of Staff for the Founder and CEO of Continuity Labs, a deep-tech startup commercializing the 'Hopf Brain' photonic architecture through its core initiatives: CODA and OPUS. Your principal is currently navigating active company building and incorporation. 
-Your goal is to provide a high-signal, low-noise executive briefing from the last 24 hours of data, balancing deep-tech R&D with the operational reality of company building.
-
-### PRIORITIZATION LOGIC (The Weighted Attention Matrix)
-1. **TIER 1: INCORPORATION & BUSINESS CRITICAL (iMessage, Gmail, High-Weight ArXiv)**
-   - Elevate ANY communications regarding the legal, financial, or structural formation of CODA, OPUS, and Continuity Labs.
-   - Treat direct requests, pending signatures, or updates from lawyers, co-founders, and investors as the absolute highest priority.
-   - ArXiv papers with a 'Hopf Score' > 85% must be featured prominently.
-
-2. **TIER 2: R&D, RESEARCH & GRANTS (Federal Feeds & Specialized Chats)**
-   - Surface relevant technical correspondence, hardware supply chain updates, or federal grant opportunities (SBIR/STTR) that could serve as non-dilutive funding for Continuity Labs.
-
-3. **TIER 3: BROAD CONTEXT (Telegram & WhatsApp)**
-   - **Broadly Demote:** Treat these as secondary sources. Do NOT summarize social chatter, memes, or low-stakes group conversations.
-   - **Exception Rule:** Only elevate a Telegram/WhatsApp message if it contains specific technical or corporate keywords: {WEIGHTED_KEYWORD_MATRIX}.
-
-### OUTPUT STRUCTURE
-- **Executive Summary:** A 1-paragraph synthesis of the 'State of the Union' for today, balancing business formation and technical progress.
-- **Continuity Labs HQ (Ops & Incorporation):** Actionable updates, legal tasks, fundraising, and administrative blockers regarding Continuity Labs, CODA, and OPUS.
-- **Topological & Hopf Signal:** Technical breakthroughs from ArXiv, specialized chats, or hardware grants.
-- **Actionable Intelligence:** Direct requests, high-priority meetings, or pending documents requiring immediate signature/review.
-- **The Noise Floor:** A very brief bulleted list of secondary items from Telegram/WhatsApp that *barely* made the cut.
-
-Maintain a tone that is professional, resonant, and motivational. Use American spelling and present information primarily in paragraphs. State information affirmatively and avoid unnecessary corrective language.
-"""
-
-OUTPUT_DIR = os.path.expanduser("~/Downloads/chief_of_staff")
+OUTPUT_DIR = os.path.expanduser("~/Downloads/cos")
 
 # --- CONFIGURATION ---
 base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -88,9 +58,21 @@ async def main_async():
     parser.add_argument(
         "--sources", 
         nargs="+", 
-        default=["slack", "telegram", "whatsapp", "gmail", "imessage", "arxiv", "govgrants"],
-        choices=["slack", "telegram", "whatsapp", "gmail", "imessage", "arxiv", "govgrants"],
+        default=["slack", "telegram", "whatsapp", "gmail", "imessage", "arxiv", "govgrants", "xlist"],
+        choices=["slack", "telegram", "whatsapp", "gmail", "imessage", "arxiv", "govgrants", "xlist"],
         help="Specify which data sources to fetch (default: all)"
+    )
+    parser.add_argument(
+        "--days",
+        type=int,
+        default=3,
+        help="Number of days to look back for data (default: 3)"
+    )
+    parser.add_argument(
+        "--xlist-url",
+        type=str,
+        default="https://x.com/i/lists/1477865252754653188",
+        help="URL of the X list to fetch"
     )
     args = parser.parse_args()
 
@@ -104,6 +86,9 @@ async def main_async():
     
     if "whatsapp" in args.sources:
         all_messages.extend(await fetch_whatsapp())
+
+    if "xlist" in args.sources:
+        all_messages.extend(await fetch_x_list(target_list_url=args.xlist_url, days=args.days))
 
     if "gmail" in args.sources:
         all_messages.extend(fetch_gmail())
@@ -135,15 +120,17 @@ async def main_async():
     
     try:
         client = get_client()
+        from genai_client import get_best_model
         
         # Read the JSON file content
         with open(output_file, "r", encoding="utf-8") as f:
             json_content = f.read()
         
         # Generate Briefing
+        model_name = get_best_model(client, MODEL_NAME)
         try:
             response = client.models.generate_content(
-                model=MODEL_NAME,
+                model=model_name,
                 config={"system_instruction": PROMPT_CHIEF_OF_STAFF_SYSTEM},
                 contents=[json_content, PROMPT_DAILY_BRIEFING_USER]
             )
@@ -157,17 +144,13 @@ async def main_async():
             )
 
         # Print to Terminal
-        print("\n" + "="*50)
-        print("DAILY BRIEFING")
-        print("="*50 + "\n")
-        print(response.text)
-        print("\n" + "="*50)
+        print("\nSummary\n")
+        print(response.text, "\n")
 
         # Optional: Save Briefing to Markdown
-        briefing_file = os.path.join(OUTPUT_DIR, f"daily_briefing_{datetime.date.today()}.md")
+        briefing_file = os.path.join(OUTPUT_DIR, f"summary_{datetime.date.today()}.md")
         with open(briefing_file, "w", encoding="utf-8") as f:
             f.write(response.text)
-        print(f"Briefing saved to {briefing_file}")
 
     except Exception as e:
         print(f"Analysis Failed: {e}")
