@@ -49,7 +49,7 @@ async def fetch_whatsapp() -> List[Dict]:
                 except Exception:
                     continue
         except Exception as e:
-            await page.screenshot(path="whatsapp_error_debug.png")
+            # await page.screenshot(path="whatsapp_error_debug.png")
             print(f"   WhatsApp Error: {e}")
         finally:
             await context.close()

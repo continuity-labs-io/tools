@@ -43,6 +43,12 @@ def _fetch_imessage_sync() -> List[Dict]:
                 "ts": ts + APPLE_EPOCH_OFFSET
             })
         conn.close()
+    except PermissionError as e:
+        print(f"   iMessage Error: {e}")
+        print("   \033[93mTo fix this, you must grant 'Full Disk Access' to your Terminal app:\033[0m")
+        print("   1. Open System Settings -> Privacy & Security -> Full Disk Access")
+        print("   2. Toggle on the switch for your terminal (e.g., Terminal, iTerm, VS Code, Cursor, etc.)")
+        print("   3. Restart your terminal and run the command again.")
     except Exception as e:
         print(f"   iMessage Error: {e}")
     
