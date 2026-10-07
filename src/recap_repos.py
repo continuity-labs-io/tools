@@ -128,7 +128,7 @@ def analyze_repos():
                 for attempt in range(max_retries):
                     try:
                         response = client.models.generate_content(
-                            model="gemini-2.5-flash",
+                            model="gemini-3.8-flash",
                             config={"system_instruction": system_instruction},
                             contents=[task_prompt, repo_content]
                         )

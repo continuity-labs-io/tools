@@ -36,7 +36,7 @@ def get_best_model(client: genai.Client, preferred_model: str) -> str:
             return am
             
     # Fallback to a stable default
-    default = "gemini-3.5-flash"
+    default = "gemini-3.8-flash"
     if default in available_models:
         logger.debug(f"   [WARN] Model '{preferred_model}' not found. Auto-switching to default '{default}'.")
         return default

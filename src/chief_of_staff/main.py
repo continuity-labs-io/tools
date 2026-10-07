@@ -24,7 +24,7 @@ from chief_of_staff.fetchers.x_list import fetch_x_list
 
 # 1. Constants & Prompts
 # Updated to match the ones in genai_client if needed, but keeping the ones from original script
-MODEL_NAME = os.environ.get("GEMINI_MODEL", "gemini-3.5-flash")
+MODEL_NAME = os.environ.get("GEMINI_MODEL", "gemini-3.8-flash")
 
 from chief_of_staff.prompts import (
     PROMPT_DAILY_BRIEFING_USER,
@@ -135,7 +135,7 @@ async def main_async():
                 contents=[json_content, PROMPT_DAILY_BRIEFING_USER]
             )
         except Exception as e:
-            fallback_model = "gemini-3.5-flash"
+            fallback_model = "gemini-3.8-flash"
             print(f"Warning: Primary model {MODEL_NAME} failed ({e}). Falling back to {fallback_model}...")
             response = client.models.generate_content(
                 model=fallback_model,

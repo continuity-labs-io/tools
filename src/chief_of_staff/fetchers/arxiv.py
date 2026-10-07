@@ -11,7 +11,7 @@ from typing import List, Dict
 from genai_client import get_client
 
 OUTPUT_DIR = os.path.expanduser("~/Downloads/chief_of_staff")
-MODEL_NAME = "gemini-3-pro-preview"
+MODEL_NAME = "gemini-3.8-flash"
 
 RESEARCH_DRAGNET = {
     "math": [

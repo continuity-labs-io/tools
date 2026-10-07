@@ -48,7 +48,7 @@ def automate_summary():
         print("Uploading and generating summary...")
         uploaded_file = client.files.upload(file=filename)
 
-        model="gemini-2.5-flash"
+        model="gemini-3.8-flash"
         response = client.models.generate_content(
             model=model,
             config={"system_instruction": system_instruction},

@@ -125,7 +125,7 @@ async def fetch_x_list(target_list_url: str = "https://x.com/i/lists/14778652527
     try:
         client = get_client()
         from genai_client import get_best_model
-        preferred_model = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+        preferred_model = os.environ.get("GEMINI_MODEL", "gemini-3.8-flash")
         model_name = get_best_model(client, preferred_model)
         
         response = client.models.generate_content(

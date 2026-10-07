@@ -12,7 +12,7 @@ load_dotenv(dotenv_path=env_path, override=True)
 # Initialize the client and test the connection
 client = get_client()
 response = client.models.generate_content(
-    model="gemini-2.5-flash", 
+    model="gemini-3.8-flash", 
     contents="Respond with exactly two words: Connection successful."
 )
 
