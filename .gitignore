@@ -4,3 +4,17 @@ __pycache__/
 *.pyc
 .DS_Store
 repomix-output.xml
+
+# Local configuration (never commit credentials or secret-helper commands)
+.env
+.env.*
+!.env.example
+
+# Data dumps (raw telemetry such as sleep.json). Blocks ALL new *.json files;
+# to commit a real JSON config later, add a "!path/to/file.json" exception.
+*.json
+src/oura/sleep.json
+
+# Local OAuth token files and their atomic-write / lock siblings
+.oura_tokens.json*
+*_tokens.json*
